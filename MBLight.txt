@@ -1,0 +1,442 @@
+//+------------------------------------------------------------------+
+//|                                                      MBLight.mq4 |
+//|                                     Copyright 20190819,Akimasa.O |
+//|                                             https://www.mql5.com |
+//+------------------------------------------------------------------+
+#property copyright "Copyright 20190819,Akimasa.O"
+#property link      "https://www.mql5.com"
+#property version   "1.00"
+#property strict
+//+------------------------------------------------------------------+
+//| Expert initialization function                                   |
+//+------------------------------------------------------------------+
+input int Magic=190818;  //MagicNumber
+input double Lots = 0.1;  //Lots
+input double Slipage= 1;  //Slippage(pips)
+input int Long_Period = 1120;  //LongBolinnger Period
+input int Short_Period = 303;  //ShortBolinger Period
+input double Dev_Red=1.0;  //RedBolin Dev
+input double Dev_Orange=1.0;  //OrangeBolin Dev
+input double Dev_Yellow= 0;  //YellowBolin Dev
+input double Dev_White = 0;  //WhiteBolin Dev 
+input double EntryLosCut = 8.4; //EntryLosCut(pips)(EntryLosCutSwitch off 10000)
+input int Time_Open_Hour1 = 10; //1.EntryStart Hour(TimeSwitch on 0)
+input int Time_Open_Minute1 = 00; //1.EntryStart Minute
+input int Time_Close_Hour1 = 13; //1.EntryClose Hour(TimeSwitch on 0)
+input int Time_Close_Minute1 = 00; //1.EntryClose Minute
+input int Time_Open_Hour2 = 16; //2.EntryStart Hour(TimeSwitch on 0)
+input int Time_Open_Minute2 = 00; //2.EntryStart Minute
+input int Time_Close_Hour2 = 29; //2.EntryClose Hour(TimeSwitch on 0)
+input int Time_Close_Minute2 = 45; //2.EntryClose Minute
+input double MaxRational = 70; //MaxRtional(pips)(MaxRatSwitch off 10000)
+input int Bar_Period = 100; //Cancel MaxCapa Period(ProfitSwitch off 10000)
+
+double _Orange = Dev_Orange;
+
+int Applied_Price= 0;  //終値
+//int Timeframe=1; //M1
+
+bool Entry_Switch=false;  //エントリー可能スイッチ
+bool Time_Switch = true; //エントリー時刻スイッチ
+bool RedBolin_Switch = false; //赤ボリンジャーの内側にいるか
+
+bool Profit_Switch=false;  //利確可能スイッチ
+bool MaxRat_Switch = false; //利確上限スイッチ
+
+double Cal_Ind = 0;
+double Cal_Rat = 0;
+double Cal_EntryLos = 0;
+int Cal_Sli = 0;
+int Cal_Time = 0;
+
+double High_Rec= 0;
+double Low_Rec = 0;
+int Rec_Bar = 0;
+
+string ObjLine;
+string ObjLine1;
+string ObjLine2;
+
+double RedHigh;
+double RedLow;
+double YellowMiddle;
+
+int OnInit(){
+
+   if(Dev_Orange < Dev_Red){
+      _Orange = Dev_Red;
+   }
+   
+//---pipsからの変換
+   double Symbol_Digits=MarketInfo(Symbol(),MODE_DIGITS);
+
+   // pipsからクレジットの計算
+   if(Symbol_Digits==3 || Symbol_Digits==5)
+   {
+     Cal_Sli = int(Slipage * 10);
+     if(Symbol_Digits==3){
+         Cal_Rat = MaxRational /100;
+         Cal_EntryLos = EntryLosCut / 100;
+     } else if(Symbol_Digits==5){
+         Cal_Rat = MaxRational / 10000;
+         Cal_EntryLos = EntryLosCut / 10000;
+     }
+   }else{
+      Cal_Rat = MaxRational;
+      Cal_Sli = int(Slipage);
+      Cal_EntryLos = EntryLosCut;
+   }
+//---
+   return(INIT_SUCCEEDED);
+}
+//+------------------------------------------------------------------+
+//| Expert deinitialization function                                 |
+//+------------------------------------------------------------------+
+void OnDeinit(const int reason)
+  {
+//---
+   
+  }
+//+------------------------------------------------------------------+
+//| Expert tick function                                             |
+//+------------------------------------------------------------------+
+void OnTick(){
+   //バーがLong_Periodより少なかったら終了
+   if(Bars<=Long_Period){
+      return;
+   } 
+   
+   RedHigh = iBands(Symbol(),0,Long_Period,Dev_Red,0,Applied_Price,1,0);
+   RedLow = iBands(Symbol(),0,Long_Period,Dev_Red,0,Applied_Price,2,0);
+   YellowMiddle = iBands(Symbol(),0,Long_Period,Dev_Red,0,Applied_Price,0,0);
+   
+   SwitchController();
+
+//-----------------------------------------------------------------------------------------------------------------------------
+//エントリー操作
+   if(OrdersTotal()==0){                 
+              
+      if(EntrySwitcher()){ 
+                                        
+         //買い注文                  
+         if(RedHigh<=Ask)                  
+            OpenOperation(0);                   
+
+         //売り注文
+         else if(RedLow>=Bid)
+            OpenOperation(1);
+
+      }   
+
+//----------------------------------------------------------------------------------------------------------------------------------------
+   //利確・損切操作
+   } else{
+   
+      //オーダーの選択
+      if(OrderSelect(0,SELECT_BY_POS,MODE_TRADES)==false){
+         return;
+      }
+      
+      double OrangeHigh = iBands(Symbol(),0,Long_Period,_Orange,0,Applied_Price,1,0);
+      double OrangeLow = iBands(Symbol(),0,Long_Period,_Orange,0,Applied_Price,2,0);
+      double WhiteMiddle = iBands(Symbol(),0,Short_Period,Dev_White,0,Applied_Price,0,0);
+      
+
+   ///////////////////////////////////////////////////////////////////////////////////////////////////////
+      //保有ポジが買い注文
+      if(OrderType()==OP_BUY){
+         
+         
+         if(Bars - Rec_Bar < Bar_Period && Bid >= OrderOpenPrice() + Cal_Rat){
+            MaxRat_Switch = false;
+         }         
+         //エントリー時から利確上限以上伸びがある場合利確
+         if(MaxRat_Switch == true){
+            
+            if(Bid >= OrderOpenPrice() + Cal_Rat){
+               CloseOperation();
+            }
+         }
+
+         //現在値がオレンジラインよりも下に超えてしまったら高値を初期化
+         if( OrangeHigh> Bid){
+            High_Rec = Bid;      
+            
+         //高値の更新      
+         } else{      
+            if(Bid>High_Rec){
+               High_Rec=Bid;
+            }
+         }
+         
+         if(Profit_Switch==true){
+           
+            //利確
+            if(WhiteMiddle>=Bid){
+              
+               CloseOperation();
+               
+            }
+
+            //profit_Switchをオフ
+            if((OrangeHigh > WhiteMiddle) || ((High_Rec - WhiteMiddle) < Cal_Ind)){ 
+               /*
+               if(Bid >= OrderOpenPrice() + 0.00200){
+                  return;
+               }*/
+               Profit_Switch=false;
+               return;
+            }
+            
+
+         } else{
+         
+            RefreshRates();
+            
+            
+            //損切り
+            if(YellowMiddle>=Bid){
+               
+               CloseOperation();
+               
+            }
+
+            //profit_Switchをオン
+            if((WhiteMiddle <= Bid) && (OrangeHigh <= WhiteMiddle) && ((High_Rec - WhiteMiddle) >= Cal_Ind ) && (Bid >= OrderOpenPrice())){
+               Profit_Switch=true;
+               return;
+            }
+
+         }
+
+   ///////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+      //保有ポジが売り注文   
+      } else if(OrderType()==OP_SELL){     
+
+         if(Bars - Rec_Bar < Bar_Period && Ask <= OrderOpenPrice() - Cal_Rat){
+            MaxRat_Switch = false;
+         }
+         //エントリー時から利確上限以上伸びがある場合利確
+         if(MaxRat_Switch == true){
+            
+            if(Ask <= OrderOpenPrice() - Cal_Rat){
+              
+               CloseOperation();
+               
+            }
+         }
+
+
+         //現在値がオレンジラインよりも上に超えてしまったら安値を初期化
+         if(OrangeLow < Ask){
+            Low_Rec = Ask;
+         } else{
+            //安値の更新
+            if(Ask<Low_Rec){
+               Low_Rec=Ask;
+            }
+         }
+
+         if(Profit_Switch==true){
+           
+            
+            if(WhiteMiddle<=Ask){
+              
+               CloseOperation();
+              
+            }
+
+            //profit_Switchをオフ
+            if((OrangeLow < WhiteMiddle) || ((WhiteMiddle - Low_Rec) < Cal_Ind )){
+               /*
+               if(Ask <= OrderOpenPrice() - 0.00200){
+                  return;
+               }*/
+               Profit_Switch=false;
+               return;
+            }
+
+
+         } else{
+    
+            if(YellowMiddle <= Ask){
+              
+               CloseOperation();
+               
+            }
+
+            //profit_Switchをオン
+            if((WhiteMiddle >= Ask) && (OrangeLow >= WhiteMiddle) && ((WhiteMiddle - Low_Rec) >= Cal_Ind)){            
+               Profit_Switch=true;
+               return;
+            }
+
+         }
+
+      }
+   //////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+   }
+   return;
+}
+
+
+//+------------------------------------------------------------------+
+
+void SwitchController(void){
+
+   //TimeSwitch
+   if(IsSummerTime() == true){
+      Cal_Time = 6;
+   }else{
+      Cal_Time = 7;
+   }   
+   if(Time_Switch == false){
+      if((Hour() == (Time_Open_Hour1 - Cal_Time) && Minute() == Time_Open_Minute1) || (Hour() == (Time_Open_Hour2 - Cal_Time) && Minute() == Time_Open_Minute2)){
+         Time_Switch = true;
+      }
+   }else{
+      if((Hour() == (Time_Close_Hour1 - Cal_Time) && Minute() == Time_Close_Minute1) || (Hour() == (Time_Close_Hour2 - Cal_Time) && Minute() == Time_Close_Minute2)){
+         Time_Switch = false;
+      }
+   }
+   
+   //RedBolin_Switch
+   if(OrdersTotal() == 0){    
+      if(RedBolin_Switch==false){
+         //現在地が赤ボリンジャーの内側に入ったら
+         if(RedHigh > Ask && RedLow < Bid){
+            RedBolin_Switch=true;
+         }
+      }
+   }
+}
+
+bool EntrySwitcher(void){
+                 
+   if(Entry_Switch == true){
+      if(!Time_Switch || !RedBolin_Switch){
+         Entry_Switch = false;
+         RedBolin_Switch = false;
+      }
+   }else{
+      if(RedBolin_Switch && Time_Switch){
+         Entry_Switch = true;
+      }else{
+         RedBolin_Switch = false;
+      }
+   }
+   return Entry_Switch;
+}
+
+void OpenOperation(int k){
+   if(k == 0){
+      int ticket=OrderSend(
+            Symbol(),
+            OP_BUY,
+            Lots,
+            Ask,
+            Cal_Sli,
+            0,
+            0,
+            NULL,
+            Magic,
+            0,
+            Red);
+      High_Rec= Ask;
+
+   }else{
+      int ticket=OrderSend(
+            Symbol(),
+            OP_SELL,
+            Lots,
+            Bid,
+            Cal_Sli,
+            NULL,
+            NULL,
+            NULL,
+            Magic,
+            0,
+            Blue);
+      Low_Rec= Bid;
+   
+   }
+   
+   RedBolin_Switch = false;
+   Entry_Switch=false;
+   Profit_Switch=false;
+   MaxRat_Switch = true;
+   Rec_Bar = Bars;
+}
+
+
+void CloseOperation(void){
+   //オーダーの選択
+   if(OrderSelect(0,SELECT_BY_POS,MODE_TRADES)==false){
+      return;
+   }
+          
+   //買い注文クローズ
+   if(OrderType() == OP_BUY){
+      if(OrderClose(
+            OrderTicket(),
+            Lots,
+            Bid,
+            NULL,
+            Gold)==false){              
+      }
+         
+   //売り注文クローズ   
+   }else if(OrderType() == OP_SELL){
+      if(OrderClose(
+            OrderTicket(),
+            Lots,
+            Ask,
+            NULL,
+            Gold)==false){
+      }
+         
+   }
+   
+   return;
+}
+
+bool IsSummerTime(){
+   //3月第2日曜日午前2時?11月第1日曜日午前2時
+   switch(Year()){
+      case 2005: if(StringToTime("2005.3.13")<=TimeCurrent()&&TimeCurrent()<=StringToTime("2005.11.6"))return true; break;
+      case 2006: if(StringToTime("2006.3.12")<=TimeCurrent()&&TimeCurrent()<=StringToTime("2006.11.5"))return true; break;
+      case 2007: if(StringToTime("2007.3.11")<=TimeCurrent()&&TimeCurrent()<=StringToTime("2007.11.4"))return true; break;
+      case 2008: if(StringToTime("2008.3.9") <=TimeCurrent()&&TimeCurrent()<=StringToTime("2008.11.2"))return true; break;
+      case 2009: if(StringToTime("2009.3.8") <=TimeCurrent()&&TimeCurrent()<=StringToTime("2009.11.1"))return true; break;
+      case 2010: if(StringToTime("2010.3.14")<=TimeCurrent()&&TimeCurrent()<=StringToTime("2010.11.7"))return true; break;
+      case 2011: if(StringToTime("2011.3.13")<=TimeCurrent()&&TimeCurrent()<=StringToTime("2011.11.6"))return true; break;
+      case 2012: if(StringToTime("2012.3.11")<=TimeCurrent()&&TimeCurrent()<=StringToTime("2012.11.4"))return true; break;
+      case 2013: if(StringToTime("2013.3.10")<=TimeCurrent()&&TimeCurrent()<=StringToTime("2013.11.3"))return true; break;
+      case 2014: if(StringToTime("2014.3.9") <=TimeCurrent()&&TimeCurrent()<=StringToTime("2014.11.2"))return true; break;
+      case 2015: if(StringToTime("2015.3.8") <=TimeCurrent()&&TimeCurrent()<=StringToTime("2015.11.1"))return true; break;
+      case 2016: if(StringToTime("2016.3.13")<=TimeCurrent()&&TimeCurrent()<=StringToTime("2016.11.6"))return true; break;
+      case 2017: if(StringToTime("2017.3.12")<=TimeCurrent()&&TimeCurrent()<=StringToTime("2017.11.5"))return true; break;
+      case 2018: if(StringToTime("2018.3.11")<=TimeCurrent()&&TimeCurrent()<=StringToTime("2018.11.4"))return true; break;
+      case 2019: if(StringToTime("2019.3.10")<=TimeCurrent()&&TimeCurrent()<=StringToTime("2019.11.3"))return true; break;
+      case 2020: if(StringToTime("2020.3.8") <=TimeCurrent()&&TimeCurrent()<=StringToTime("2020.11.1"))return true; break;
+      case 2021: if(StringToTime("2021.3.14")<=TimeCurrent()&&TimeCurrent()<=StringToTime("2021.11.7"))return true; break;
+      case 2022: if(StringToTime("2022.3.13")<=TimeCurrent()&&TimeCurrent()<=StringToTime("2022.11.6"))return true; break;
+      case 2023: if(StringToTime("2023.3.12")<=TimeCurrent()&&TimeCurrent()<=StringToTime("2023.11.5"))return true; break;
+      case 2024: if(StringToTime("2024.3.10")<=TimeCurrent()&&TimeCurrent()<=StringToTime("2024.11.3"))return true; break;
+      case 2025: if(StringToTime("2025.3.9") <=TimeCurrent()&&TimeCurrent()<=StringToTime("2025.11.2"))return true; break;
+      case 2026: if(StringToTime("2026.3.8") <=TimeCurrent()&&TimeCurrent()<=StringToTime("2026.11.1"))return true; break;
+      case 2027: if(StringToTime("2027.3.14")<=TimeCurrent()&&TimeCurrent()<=StringToTime("2027.11.7"))return true; break;
+      case 2028: if(StringToTime("2028.3.12")<=TimeCurrent()&&TimeCurrent()<=StringToTime("2028.11.5"))return true; break;
+      case 2029: if(StringToTime("2029.3.11")<=TimeCurrent()&&TimeCurrent()<=StringToTime("2029.11.4"))return true; break;
+      case 2030: if(StringToTime("2030.3.10")<=TimeCurrent()&&TimeCurrent()<=StringToTime("2030.11.3"))return true; break;
+      case 2031: if(StringToTime("2031.3.9") <=TimeCurrent()&&TimeCurrent()<=StringToTime("2031.11.2"))return true; break;
+      case 2032: if(StringToTime("2032.3.14")<=TimeCurrent()&&TimeCurrent()<=StringToTime("2032.11.7"))return true; break;
+      case 2033: if(StringToTime("2033.3.13")<=TimeCurrent()&&TimeCurrent()<=StringToTime("2033.11.6"))return true; break;
+      case 2034: if(StringToTime("2034.3.12")<=TimeCurrent()&&TimeCurrent()<=StringToTime("2034.11.5"))return true; break;
+      case 2035: if(StringToTime("2035.3.11")<=TimeCurrent()&&TimeCurrent()<=StringToTime("2035.11.4"))return true; break;
+      case 2036: if(StringToTime("2036.3.9") <=TimeCurrent()&&TimeCurrent()<=StringToTime("2036.11.2"))return true; break;
+      case 2037: if(StringToTime("2037.3.8") <=TimeCurrent()&&TimeCurrent()<=StringToTime("2037.11.1"))return true; break;
+      case 2038: if(StringToTime("2038.3.14")<=TimeCurrent()&&TimeCurrent()<=StringToTime("2038.11.7"))return true; break;
+   }
+   return false;
+}
