@@ -19,6 +19,7 @@ input double Dev_Red=1.0;  //RedBolin Dev
 input double Dev_Orange=1.0;  //OrangeBolin Dev
 input double Dev_Yellow= 0;  //YellowBolin Dev
 input double Dev_White = 0;  //WhiteBolin Dev 
+input double Indication=10;  //Indication(pips)
 input double EntryLosCut = 8.4; //EntryLosCut(pips)(EntryLosCutSwitch off 10000)
 input int Time_Open_Hour1 = 10; //1.EntryStart Hour(TimeSwitch on 0)
 input int Time_Open_Minute1 = 00; //1.EntryStart Minute
@@ -75,13 +76,16 @@ int OnInit(){
    {
      Cal_Sli = int(Slipage * 10);
      if(Symbol_Digits==3){
+         Cal_Ind = Indication / 100;
          Cal_Rat = MaxRational /100;
          Cal_EntryLos = EntryLosCut / 100;
      } else if(Symbol_Digits==5){
+         Cal_Ind = Indication / 10000;
          Cal_Rat = MaxRational / 10000;
          Cal_EntryLos = EntryLosCut / 10000;
      }
    }else{
+      Cal_Ind = Indication;
       Cal_Rat = MaxRational;
       Cal_Sli = int(Slipage);
       Cal_EntryLos = EntryLosCut;
@@ -180,10 +184,9 @@ void OnTick(){
 
             //profit_Switchをオフ
             if((OrangeHigh > WhiteMiddle) || ((High_Rec - WhiteMiddle) < Cal_Ind)){ 
-               /*
                if(Bid >= OrderOpenPrice() + 0.00200){
                   return;
-               }*/
+               }
                Profit_Switch=false;
                return;
             }
@@ -248,10 +251,9 @@ void OnTick(){
 
             //profit_Switchをオフ
             if((OrangeLow < WhiteMiddle) || ((WhiteMiddle - Low_Rec) < Cal_Ind )){
-               /*
                if(Ask <= OrderOpenPrice() - 0.00200){
                   return;
-               }*/
+               }
                Profit_Switch=false;
                return;
             }
