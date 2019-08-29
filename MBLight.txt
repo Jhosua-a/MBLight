@@ -5,7 +5,7 @@
 //+------------------------------------------------------------------+
 #property copyright "Copyright 20190819,Akimasa.O"
 #property link      "https://www.mql5.com"
-#property version   "1.00"
+#property version   "1.02"
 #property strict
 //+------------------------------------------------------------------+
 //| Expert initialization function                                   |
@@ -123,11 +123,11 @@ void OnTick(){
       if(EntrySwitcher()){ 
                                         
          //買い注文                  
-         if(RedHigh<=Ask)                  
+         if(RedHigh <= Bid)                  
             OpenOperation(0);                   
 
          //売り注文
-         else if(RedLow>=Bid)
+         else if(RedLow >= Bid)
             OpenOperation(1);
 
       }   
@@ -151,43 +151,39 @@ void OnTick(){
       if(OrderType()==OP_BUY){
          
          
-         if(Bars - Rec_Bar < Bar_Period && Bid >= OrderOpenPrice() + Cal_Rat){
+         if(Bars - Rec_Bar < Bar_Period && Bid - OrderOpenPrice() >= Cal_Rat){
             MaxRat_Switch = false;
          }         
          //エントリー時から利確上限以上伸びがある場合利確
-         if(MaxRat_Switch == true){
-            
-            if(Bid >= OrderOpenPrice() + Cal_Rat){
+         if(MaxRat_Switch == true){            
+            if(Bid - OrderOpenPrice() >= Cal_Rat){
                CloseOperation();
             }
          }
 
          //現在値がオレンジラインよりも下に超えてしまったら高値を初期化
-         if( OrangeHigh> Bid){
+         if(OrangeHigh > Bid){
             High_Rec = Bid;      
             
          //高値の更新      
          } else{      
-            if(Bid>High_Rec){
-               High_Rec=Bid;
+            if(Bid > High_Rec){
+               High_Rec = Bid;
             }
          }
          
-         if(Profit_Switch==true){
-           
+         if(Profit_Switch == true){           
             //利確
-            if(WhiteMiddle>=Bid){
-              
-               CloseOperation();
-               
+            if(WhiteMiddle >= Bid){             
+               CloseOperation(); 
             }
 
             //profit_Switchをオフ
             if((OrangeHigh > WhiteMiddle) || ((High_Rec - WhiteMiddle) < Cal_Ind)){ 
-               if(Bid >= OrderOpenPrice() + 0.00200){
+               if(Bid - OrderOpenPrice() >= 0.00200){
                   return;
                }
-               Profit_Switch=false;
+               Profit_Switch = false;
                return;
             }
             
@@ -196,16 +192,13 @@ void OnTick(){
          
             RefreshRates();
             
-            
             //損切り
-            if(YellowMiddle>=Bid){
-               
+            if(YellowMiddle >= Bid){   
                CloseOperation();
-               
             }
 
             //profit_Switchをオン
-            if((WhiteMiddle <= Bid) && (OrangeHigh <= WhiteMiddle) && ((High_Rec - WhiteMiddle) >= Cal_Ind ) && (Bid >= OrderOpenPrice())){
+            if((WhiteMiddle <= Bid) && (OrangeHigh <= WhiteMiddle) && (High_Rec - WhiteMiddle >= Cal_Ind ) && (Bid >= OrderOpenPrice())){ //うまく利確とかならなかったらここを確認
                Profit_Switch=true;
                return;
             }
@@ -216,59 +209,51 @@ void OnTick(){
       //保有ポジが売り注文   
       } else if(OrderType()==OP_SELL){     
 
-         if(Bars - Rec_Bar < Bar_Period && Ask <= OrderOpenPrice() - Cal_Rat){
+         if(Bars - Rec_Bar < Bar_Period && OrderOpenPrice() - Ask >= Cal_Rat){
             MaxRat_Switch = false;
          }
+         
          //エントリー時から利確上限以上伸びがある場合利確
-         if(MaxRat_Switch == true){
-            
-            if(Ask <= OrderOpenPrice() - Cal_Rat){
-              
+         if(MaxRat_Switch == true){            
+            if(OrderOpenPrice() - Ask >= Cal_Rat){
                CloseOperation();
-               
             }
          }
 
 
          //現在値がオレンジラインよりも上に超えてしまったら安値を初期化
-         if(OrangeLow < Ask){
-            Low_Rec = Ask;
+         if(OrangeLow < Bid){
+            Low_Rec = Bid;
          } else{
             //安値の更新
-            if(Ask<Low_Rec){
-               Low_Rec=Ask;
+            if(Bid < Low_Rec){
+               Low_Rec = Bid;
             }
          }
 
-         if(Profit_Switch==true){
-           
-            
-            if(WhiteMiddle<=Ask){
-              
+         if(Profit_Switch == true){
+                      
+            if(WhiteMiddle <= Bid){              
                CloseOperation();
-              
             }
 
             //profit_Switchをオフ
-            if((OrangeLow < WhiteMiddle) || ((WhiteMiddle - Low_Rec) < Cal_Ind )){
-               if(Ask <= OrderOpenPrice() - 0.00200){
+            if((OrangeLow < WhiteMiddle) || (WhiteMiddle - Low_Rec < Cal_Ind )){
+               if(OrderOpenPrice() - Ask >= 0.00200){
                   return;
                }
                Profit_Switch=false;
                return;
             }
 
-
          } else{
     
-            if(YellowMiddle <= Ask){
-              
-               CloseOperation();
-               
+            if(YellowMiddle <= Bid){             
+               CloseOperation(); 
             }
 
             //profit_Switchをオン
-            if((WhiteMiddle >= Ask) && (OrangeLow >= WhiteMiddle) && ((WhiteMiddle - Low_Rec) >= Cal_Ind)){            
+            if((WhiteMiddle >= Bid) && (OrangeLow >= WhiteMiddle) && (WhiteMiddle - Low_Rec >= Cal_Ind)){            
                Profit_Switch=true;
                return;
             }
@@ -306,7 +291,7 @@ void SwitchController(void){
    if(OrdersTotal() == 0){    
       if(RedBolin_Switch==false){
          //現在地が赤ボリンジャーの内側に入ったら
-         if(RedHigh > Ask && RedLow < Bid){
+         if(RedHigh > Bid && RedLow < Bid){
             RedBolin_Switch=true;
          }
       }
@@ -344,7 +329,7 @@ void OpenOperation(int k){
             Magic,
             0,
             Red);
-      High_Rec= Ask;
+      High_Rec= Bid; 
 
    }else{
       int ticket=OrderSend(
