@@ -54,9 +54,9 @@ double High_Rec= 0;
 double Low_Rec = 0;
 int Rec_Bar = 0;
 
-string ObjLine;
-string ObjLine1;
-string ObjLine2;
+string ObjText = "RedBolinWidth";
+double RBWidth = 0;
+double Cal_Width = 1;
 
 double RedHigh;
 double RedLow;
@@ -79,17 +79,32 @@ int OnInit(){
          Cal_Ind = Indication / 100;
          Cal_Rat = MaxRational /100;
          Cal_EntryLos = EntryLosCut / 100;
+         Cal_Width = 100;
      } else if(Symbol_Digits==5){
          Cal_Ind = Indication / 10000;
          Cal_Rat = MaxRational / 10000;
          Cal_EntryLos = EntryLosCut / 10000;
+         Cal_Width = 10000;
      }
    }else{
       Cal_Ind = Indication;
       Cal_Rat = MaxRational;
       Cal_Sli = int(Slipage);
       Cal_EntryLos = EntryLosCut;
+      Cal_Width = 1;
    }
+   
+   //右下にレッドボリンジャーの幅を表示
+   ObjectCreate(0,ObjText,OBJ_LABEL,0,0,0);
+   
+   ObjectSetInteger(0,ObjText, OBJPROP_COLOR,White);
+   ObjectSetInteger(0,ObjText, OBJPROP_FONTSIZE,12);
+   ObjectSetInteger(0,ObjText, OBJPROP_WIDTH,10);
+   ObjectSetInteger(0,ObjText, OBJPROP_CORNER, CORNER_RIGHT_LOWER);
+   ObjectSetInteger(0,ObjText, OBJPROP_ANCHOR, ANCHOR_RIGHT_LOWER);
+   ObjectSetInteger(0,ObjText, OBJPROP_XDISTANCE, 10);
+   ObjectSetInteger(0,ObjText, OBJPROP_YDISTANCE, 10);
+   ObjectSetString(0,ObjText, OBJPROP_TEXT, StringConcatenate("RBWidth: " ,DoubleToString(RBWidth)));
 //---
    return(INIT_SUCCEEDED);
 }
@@ -99,7 +114,7 @@ int OnInit(){
 void OnDeinit(const int reason)
   {
 //---
-   
+   ObjectDelete(0,ObjText);
   }
 //+------------------------------------------------------------------+
 //| Expert tick function                                             |
@@ -113,6 +128,10 @@ void OnTick(){
    RedHigh = iBands(Symbol(),0,Long_Period,Dev_Red,0,Applied_Price,1,0);
    RedLow = iBands(Symbol(),0,Long_Period,Dev_Red,0,Applied_Price,2,0);
    YellowMiddle = iBands(Symbol(),0,Long_Period,Dev_Red,0,Applied_Price,0,0);
+   
+   //レッドボリンジャーの幅を表示を変更
+   RBWidth = (RedHigh - YellowMiddle) * Cal_Width;
+   ObjectSetString(0, ObjText,OBJPROP_TEXT,StringConcatenate("RBWidth: " ,DoubleToString(RBWidth)));
    
    SwitchController();
 
