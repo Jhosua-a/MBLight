@@ -5,7 +5,7 @@
 //+------------------------------------------------------------------+
 #property copyright "Copyright 20190819,Akimasa.O"
 #property link      "https://www.mql5.com"
-#property version   "1.04"
+#property version   "1.05"
 #property strict
 //+------------------------------------------------------------------+
 //| Expert initialization function                                   |
@@ -50,6 +50,19 @@ double Cal_Rat = 0;
 double Cal_EntryLos = 0;
 int Cal_Sli = 0;
 int Cal_Time = 0;
+
+// 収支レポート用記録変数
+int Time_out_Rec = 0; //MaxOfTime
+double LosCut_Rec = 0;
+string filename = StringConcatenate("WeeklyReport.csv");
+int Rec_day = 0;
+double Rec_dayLosCut = 0;
+double LosCut = 0;
+double MaxPrice = 0; // Max
+int MaxofTime = 0;
+string EntryDate; // Date
+string Rate; // Rate
+int Conti_LosCut = 0;
 
 double High_Rec= 0;
 double Low_Rec = 0;
@@ -107,6 +120,23 @@ int OnInit(){
    ObjectSetInteger(0,ObjText, OBJPROP_XDISTANCE, 10);
    ObjectSetInteger(0,ObjText, OBJPROP_YDISTANCE, 10);
    ObjectSetString(0,ObjText, OBJPROP_TEXT, StringConcatenate("RBWidth: " ,DoubleToString(RBWidth)));
+   
+   
+   //csvファイルのヘッダー
+   int handle = FileOpen(filename,FILE_WRITE|FILE_CSV,",");
+   FileWrite(
+         handle,
+         "Date",
+         "EntryTime",
+         "ExitTime",
+         "EntryPrice",
+         "ExitPrice",
+         "Type",
+         "Profit",
+         "LosCut");  
+   FileClose(handle);
+    
+   ArrayInitialize(Sep,0);
 //---
    return(INIT_SUCCEEDED);
 }
@@ -392,6 +422,7 @@ void OpenOperation(int k){
    Profit_Switch=false;
    MaxRat_Switch = true;
    Rec_Bar = Bars;
+   LosCut_Rec = NormalizeDouble(LosCut * 10000, 1);
 }
 
 
@@ -400,6 +431,27 @@ void CloseOperation(void){
    if(OrderSelect(0,SELECT_BY_POS,MODE_TRADES)==false){
       return;
    }
+   
+   MaxofTime = Time_out_Rec - Rec_Bar;
+   EntryDate = TimeToStr(OrderOpenTime(),TIME_DATE);
+   StringReplace(EntryDate , ".", "/");
+   if(MaxPrice == 0){
+      Rate = StringConcatenate(OrderProfit() / 0.1 *100, "%");
+   } else{
+      Rate = StringConcatenate(OrderProfit() / MaxPrice *100, "%");
+   }
+
+   int OpenTimeH = TimeHour(OrderOpenTime()) + Cal_Time;
+   int OpenTimeM = TimeMinute(OrderOpenTime());
+   int CloseTimeH = TimeHour(Time[0]) + Cal_Time;
+   int CloseTimeM = TimeMinute(Time[0]);
+   if(CloseTimeH < OpenTimeH) CloseTimeH += 24;
+   
+   string OpenTime = StringConcatenate(OpenTimeH, ":", OpenTimeM);
+   string CloseTime = StringConcatenate(CloseTimeH, ":", CloseTimeM);
+                           
+   int handle = FileOpen(filename,FILE_WRITE|FILE_READ|FILE_CSV,",");
+   FileSeek(handle,0,SEEK_END);
           
    //買い注文クローズ
    if(OrderType() == OP_BUY){
@@ -411,6 +463,17 @@ void CloseOperation(void){
             Gold)==false){              
       }
          
+      FileWrite(
+            handle,
+            EntryDate,
+            OpenTime,
+            CloseTime,
+            OrderOpenPrice(),
+            OrderClosePrice(),
+            "BUY",
+            OrderProfit(),
+            LosCut_Rec);  
+         
    //売り注文クローズ   
    }else if(OrderType() == OP_SELL){
       if(OrderClose(
@@ -420,8 +483,22 @@ void CloseOperation(void){
             NULL,
             Gold)==false){
       }
+     
+         
+      FileWrite(
+            handle,
+            EntryDate,
+            OpenTime,
+            CloseTime,
+            OrderOpenPrice(),
+            OrderClosePrice(),
+            "SELL",
+            OrderProfit(),
+            LosCut_Rec);
          
    }
+   
+   FileClose(handle);
    
    return;
 }
