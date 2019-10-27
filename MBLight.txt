@@ -57,7 +57,6 @@ double LosCut_Rec = 0;
 string filename = StringConcatenate("WeeklyReport.csv");
 int Rec_day = 0;
 double Rec_dayLosCut = 0;
-double LosCut = 0;
 double MaxPrice = 0; // Max
 int MaxofTime = 0;
 string EntryDate; // Date
@@ -136,7 +135,7 @@ int OnInit(){
          "LosCut");  
    FileClose(handle);
     
-   ArrayInitialize(Sep,0);
+
 //---
    return(INIT_SUCCEEDED);
 }
